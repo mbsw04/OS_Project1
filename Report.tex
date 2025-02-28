@@ -1,146 +1,138 @@
-\documentclass[12pt, onecolumn]{IEEEtran}
+\documentclass{article}
 \usepackage{graphicx}
-\usepackage{hyperref}
 \usepackage{listings}
-\usepackage{amsmath}
-\usepackage{cite}
+\usepackage{hyperref}
+\usepackage{enumitem}
 \usepackage{geometry}
 \geometry{a4paper, margin=1in}
 
-\title{Inter-Process Communication in Air Traffic Control}
-\author{Your Name \\ Course Section \\ NETID (e.g., jdoe3@students.kennesaw.edu)}
-\date{\today}
+\title{CS 3502: Project 1 - Multi-Threaded Programming and IPC}
+\author{
+    Maan Bhagat \\
+    Course Section: CS 3502/03 \\
+    NETID: mbhagat3 \\
+    Submission Date: \today
+}
+\date{}
 
 \begin{document}
 
 \maketitle
 
-\begin{abstract}
-This report presents the implementation of an inter-process communication (IPC) system for an Air Traffic Control (ATC) simulation. The objective is to demonstrate IPC using named pipes (FIFOs) to facilitate communication between an ATC tower and an aircraft. The project highlights key concepts of process synchronization, data flow between independent processes, and real-world applications of IPC in aviation systems.
-\end{abstract}
-
 \section{Introduction}
-Inter-process communication (IPC) enables separate processes to exchange data, which is crucial in real-time systems like ATC. In our implementation:
-\begin{itemize}
-    \item The ATC tower sends landing instructions to an aircraft via a named pipe.
-    \item The aircraft receives the message, acknowledges it, and responds.
-    \item The ATC tower reads the acknowledgment to ensure safe landing.
-\end{itemize}
+This report details the implementation of Project 1 for CS 3502, focusing on multi-threaded programming and inter-process communication (IPC), as outlined by Instructor Chris Regan in the provided project document. The project simulates an airport traffic control system, requiring the development of multi-threaded applications for managing plane operations and IPC mechanisms for communication between the Air Traffic Control (ATC) and aircraft. This project was completed within a Docker container running Ubuntu, with code pulled from a GitHub repository, fulfilling the "Public Code Repository" deliverable requirement.
+
+The primary objectives were to gain practical experience in thread management, synchronization, and IPC using named pipes, as detailed in the project's "Objectives" section. This involved addressing challenges related to concurrency, resource contention, and data transmission between independent processes. The project was divided into two main parts: Project A, focusing on multi-threading, and Project B, focusing on IPC, as described in the "Project Overview and Implementation Guide".
+
+My approach involved a phased implementation, starting with basic thread creation and progressing to complex synchronization and IPC mechanisms. The development environment was set up using Docker and Ubuntu, facilitating a consistent and reproducible development process. This followed the environment setup guidelines provided in the project document, specifically focusing on "Virtualization Options" and the use of "Windows Subsystem for Linux (WSL)".
 
 \section{Implementation Details}
 
-\subsection{Overview of IPC in Air Traffic Control}
-Named pipes (FIFOs) allow unidirectional or bidirectional communication between processes. In this project, two FIFOs are used:
-\begin{itemize}
-    \item \texttt{atc\_pipe}: The ATC tower writes landing clearance messages.
-    \item \texttt{aircraft\_pipe}: The aircraft responds with an acknowledgment.
-\end{itemize}
+\subsection{Threading Solution (Project A)}
+The threading solution was implemented using C++, adhering to the "Language and Environment Guidelines". Threads were managed to simulate individual plane operations (landing or takeoff). Synchronization was achieved using mutexes to prevent race conditions when accessing shared resources, such as the runway.
 
-\subsection{ATC Tower Code}
-The ATC tower writes a message to the named pipe and then waits for an acknowledgment:
-\begin{lstlisting}[language=C++, caption=ATC Tower Sending Message]
+The project document's "Project A: Multi-Threading Implementation (Four Phases)" section guided the implementation. Initially, basic thread creation was established:
+
+\begin{lstlisting}[language=C++, caption={Basic Thread Creation}, label={lst:basic_thread}]
+#include <thread>
 #include <iostream>
-#include <fstream>
-#include <unistd.h>
+
+void planeOperation(int planeID) {
+    std::cout << "Plane " << planeID << " is operating.\n";
+}
 
 int main() {
-    std::ofstream atcOut("atc_pipe");
-    if (!atcOut) {
-        std::cerr << "Error opening ATC pipe!" << std::endl;
-        return 1;
-    }
-    atcOut << "ATC Tower: Permission granted to land." << std::endl;
-    atcOut.close();
-    sleep(2);
-
-    std::ifstream aircraftIn("aircraft_pipe");
-    if (!aircraftIn) {
-        std::cerr << "Error opening Aircraft pipe!" << std::endl;
-        return 1;
-    }
-    std::string response;
-    getline(aircraftIn, response);
-    aircraftIn.close();
-
-    std::cout << "Received from aircraft: " << response << std::endl;
+    std::thread t1(planeOperation, 1);
+    t1.join();
     return 0;
 }
 \end{lstlisting}
 
-\subsection{Aircraft Code}
-The aircraft reads the ATC instruction and sends an acknowledgment back:
-\begin{lstlisting}[language=C++, caption=Aircraft Receiving and Responding]
+Subsequently, mutexes were introduced to manage shared resources:
+
+\begin{lstlisting}[language=C++, caption={Mutex Synchronization}, label={lst:mutex_sync}]
+#include <thread>
+#include <mutex>
 #include <iostream>
-#include <fstream>
-#include <unistd.h>
+
+std::mutex runwayMutex;
+
+void planeOperation(int planeID) {
+    std::lock_guard<std::mutex> lock(runwayMutex);
+    std::cout << "Plane " << planeID << " is using the runway.\n";
+}
 
 int main() {
-    std::ifstream atcIn("atc_pipe");
-    if (!atcIn) {
-        std::cerr << "Error opening ATC pipe!" << std::endl;
-        return 1;
-    }
-    std::string message;
-    getline(atcIn, message);
-    atcIn.close();
-
-    std::cout << "Received from ATC: " << message << std::endl;
-
-    std::ofstream aircraftOut("aircraft_pipe");
-    if (!aircraftOut) {
-        std::cerr << "Error opening Aircraft pipe!" << std::endl;
-        return 1;
-    }
-    aircraftOut << "Aircraft: Acknowledged. Landing now." << std::endl;
-    aircraftOut.close();
-
+    std::thread t1(planeOperation, 1);
+    std::thread t2(planeOperation, 2);
+    t1.join();
+    t2.join();
     return 0;
 }
 \end{lstlisting}
+
+Deadlock prevention was addressed by using `std::lock` to acquire multiple mutexes atomically, ensuring a consistent locking order. This was crucial in scenarios where multiple threads required access to both the runway and control tower resources.
+
+\subsection{IPC Solution (Project B)}
+IPC was implemented using named pipes, as specified in the "Project B: Inter-Process Communication (IPC)" section. Two pipes, \texttt{atc\_pipe} and \texttt{aircraft\_pipe}, facilitated communication between the ATC and aircraft processes. The ATC process wrote clearance messages to \texttt{atc\_pipe}, and the aircraft process read these messages. Responses were sent back through \texttt{aircraft\_pipe}.
+
+Pipe creation was performed using `mkfifo`:
+
+\begin{lstlisting}[language=C++, caption={Pipe Creation}, label={lst:pipe_create}]
+#include <sys/stat.h>
+#include <unistd.h>
+
+int main() {
+    mkfifo("atc_pipe", 0666);
+    mkfifo("aircraft_pipe", 0666);
+    return 0;
+}
+\end{lstlisting}
+
+Data transmission was implemented using file I/O:
+
+\begin{lstlisting}[language=C++, caption={Data Transmission}, label={lst:data_transmit}]
+// ATC Process
+std::ofstream atcOut("atc_pipe");
+atcOut << "ATC Tower: Permission granted to land." << std::endl;
+
+// Aircraft Process
+std::ifstream atcIn("atc_pipe");
+std::getline(atcIn, message);
+\end{lstlisting}
+
+Challenges included ensuring proper pipe creation and handling potential blocking issues, which were resolved by carefully managing read and write operations and closing pipes after use.
 
 \section{Environment Setup and Tool Usage}
+The development environment consisted of a Docker container running Ubuntu, as recommended in the "Environment Setup" section. This setup provided a consistent environment across different machines and facilitated easier debugging, aligning with the "Virtualization Options" and "Windows Subsystem for Linux (WSL)" guidelines. Code was managed using Git and hosted on GitHub, fulfilling the "Public Code Repository" deliverable requirement.
 
-\subsection{Setting Up Docker Environment}
-1. Install Docker:
-\begin{lstlisting}[language=bash]
-sudo apt update && sudo apt install docker.io
-\end{lstlisting}
+C++ was chosen for its performance and threading capabilities, as per the "Language and Environment Guidelines". The `std::thread` library and mutexes were extensively used for thread management and synchronization. Named pipes were implemented using standard file I/O operations and the `mkfifo` system call.
 
-2. Create a container with Ubuntu:
-\begin{lstlisting}[language=bash]
-docker run -it --name atc_env ubuntu bash
-\end{lstlisting}
-
-3. Install required tools inside the container:
-\begin{lstlisting}[language=bash]
-apt update && apt install g++ make vim
-\end{lstlisting}
-
-4. Verify installation:
-\begin{lstlisting}[language=bash]
-g++ --version && make --version
-\end{lstlisting}
+Setting up Docker and ensuring proper pipe permissions within the container posed initial challenges. These were addressed by consulting Docker documentation and adjusting file permissions as needed. Tools like `gdb` and `valgrind` were used for debugging and performance analysis, as suggested in the "Frequently Asked Questions (FAQ)" section.
 
 \section{Challenges and Solutions}
-\begin{itemize}
-    \item \textbf{Synchronization Issues}: Used sleep delays to ensure correct message order.
-    \item \textbf{Named Pipe Permissions}: Ensured correct read/write permissions with \texttt{chmod 666}.
-    \item \textbf{Blocking Read}: Used non-blocking techniques to prevent indefinite waiting for data.
-    \item \textbf{Debugging IPC}: Used logs and intermediate file outputs to trace message flow.
-\end{itemize}
+A significant challenge was preventing deadlocks in the multi-threaded application. This was resolved by implementing a consistent locking order and using `std::lock` to acquire multiple mutexes atomically.
+
+Another challenge was ensuring reliable IPC communication using named pipes. This was addressed by implementing robust error handling and ensuring proper pipe creation and closure.
+
+Debugging was performed using `gdb` within the Docker container. For example, breakpoints were set in the `planeOperation` function to inspect the state of mutex locks. Additionally, `std::cout` statements were strategically placed to log the sequence of events, aiding in the identification of race conditions. External resources, such as online documentation and Stack Overflow, were consulted to resolve specific issues, as allowed in the "FAQ".
 
 \section{Results and Outcomes}
-The ATC successfully communicates with the aircraft using named pipes, demonstrating IPC principles. The response times are minimal, and the system simulates real-world ATC scenarios effectively. Performance tests confirmed efficient message exchange with low overhead.
+The project successfully implemented a multi-threaded airport traffic control simulation with IPC. The threading solution effectively managed plane operations, preventing race conditions and deadlocks. The IPC solution enabled reliable communication between the ATC and aircraft processes.
+
+Performance was adequate for the simulation's requirements. Future improvements could include implementing more sophisticated scheduling algorithms and adding error recovery mechanisms for IPC. Testing was conducted as per the "Testing" guidelines, including threading and IPC testing, and a "Demonstration Video" was created to showcase the results.
 
 \section{Reflection and Learning}
-This project enhanced understanding of IPC mechanisms, process synchronization, and system-level programming in Linux environments. The use of Docker streamlined environment setup, making it easier to test and deploy IPC-based applications.
+This project provided valuable experience in multi-threaded programming and IPC. It reinforced the importance of proper synchronization and communication mechanisms in concurrent systems. I gained a deeper understanding of mutexes, named pipes, and the challenges associated with concurrent programming.
+
+The project also highlighted the importance of a well-defined development environment and the benefits of using version control. The experience contributed to a better understanding of operating systems and threading concepts. If given more time, I would explore more advanced debugging techniques and implement more robust error handling for IPC.
 
 \section{References}
-\begin{thebibliography}{9}
-    \bibitem{linuxpipes} Linux Pipes Documentation, \url{https://man7.org/linux/man-pages/man7/pipe.7.html}
-    \bibitem{cpp} C++ Standard Library Documentation, \url{https://en.cppreference.com/w/}
-    \bibitem{docker} Docker Documentation, \url{https://docs.docker.com/}
-    \bibitem{atcsim} Air Traffic Control Simulation Studies, \url{https://www.faa.gov/}
-\end{thebibliography}
+\begin{itemize}
+    \item C++ Documentation: \url{https://en.cppreference.com/w/}
+    \item Docker Documentation: \url{https://docs.docker.com/}
+    \item Linux Man Pages: `man mkfifo`, `man mutex`, `man thread`
+    \item CS 3502: Project 1 - Multi-Threaded Programming and IPC (Provided Project Document)
+\end{itemize}
 
 \end{document}
