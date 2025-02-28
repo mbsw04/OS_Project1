@@ -25,6 +25,8 @@ void planeOperation(int planeID, bool isLanding) {
 int main() {
     thread t1(planeOperation, 1, true);
     thread t2(planeOperation, 2, false);
+    thread t1(planeOperation, 3, true);
+    thread t2(planeOperation, 4, false);
 
     t1.join();
     t2.join();
