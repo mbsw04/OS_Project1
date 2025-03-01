@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <unistd.h>
-#include <cstring>
+#include <sys/stat.h>
 
 using namespace std;
 
